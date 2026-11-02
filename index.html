@@ -33,6 +33,10 @@ td:last-child,th:last-child{text-align:right}
 <script>
 // 굿앰디 일괄등록용 옛날 엑셀(.xls, BIFF8) 파일을 만듭니다. A칸: 상품코드(글자), B칸: 수량(숫자)
 function makeXls(rows) {
+  return makeGridXls(rows.map(function (r) { return [String(r.code), Number(r.qty)]; }));
+}
+// 표를 그대로 .xls로 만듭니다. 글자는 글자 칸, 숫자는 숫자 칸이 됩니다. cols: 칸마다 { width, text } (선택)
+function makeGridXls(grid, cols) {
   function bytes() { return []; }
   function u16(a, v) { a.push(v & 255, (v >> 8) & 255); }
   function u32(a, v) { a.push(v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255); }
@@ -64,23 +68,34 @@ function makeXls(rows) {
     return b;
   }
 
-  var codes = rows.map(function (r) { return String(r.code); });
+  var texts = [];
+  grid.forEach(function (row) { row.forEach(function (c) { if (typeof c === 'string') texts.push(c); }); });
+  var nCols = grid.reduce(function (m, row) { return Math.max(m, row.length); }, 0);
 
   // 시트
   var sheet = bytes();
   rec(sheet, 0x0809, bof(0x0010));
-  var d = bytes(); u32(d, 0); u32(d, rows.length); u16(d, 0); u16(d, 2); u16(d, 0);
+  (cols || []).forEach(function (c, i) {
+    var w = bytes(); u16(w, i); u16(w, i); u16(w, c.width * 256); u16(w, c.text ? 16 : 15); u16(w, 0); u16(w, 0);
+    rec(sheet, 0x007D, w);
+  });
+  var d = bytes(); u32(d, 0); u32(d, grid.length); u16(d, 0); u16(d, nCols); u16(d, 0);
   rec(sheet, 0x0200, d);
   var w2 = bytes(); u16(w2, 0x06B6); u16(w2, 0); u16(w2, 0); u16(w2, 0x40); u16(w2, 0); u16(w2, 0); u16(w2, 0); u32(w2, 0);
   rec(sheet, 0x023E, w2);
-  rows.forEach(function (r, i) {
-    var l = bytes(); u16(l, i); u16(l, 0); u16(l, 16); u32(l, i);
-    rec(sheet, 0x00FD, l);
-    var n = bytes(); u16(n, i); u16(n, 1); u16(n, 15);
-    var f = new Float64Array([Number(r.qty)]);
-    var fb = new Uint8Array(f.buffer);
-    for (var k = 0; k < 8; k++) n.push(fb[k]);
-    rec(sheet, 0x0203, n);
+  var textNo = 0;
+  grid.forEach(function (row, i) {
+    row.forEach(function (c, j) {
+      if (typeof c === 'string') {
+        var l = bytes(); u16(l, i); u16(l, j); u16(l, 16); u32(l, textNo++);
+        rec(sheet, 0x00FD, l);
+      } else {
+        var n = bytes(); u16(n, i); u16(n, j); u16(n, 15);
+        var fb = new Uint8Array(new Float64Array([c]).buffer);
+        for (var k = 0; k < 8; k++) n.push(fb[k]);
+        rec(sheet, 0x0203, n);
+      }
+    });
   });
   rec(sheet, 0x000A, []);
 
@@ -98,8 +113,12 @@ function makeXls(rows) {
     rec(o, 0x0293, [0x00, 0x80, 0x00, 0xFF]);
     var bs = bytes(); u32(bs, sheetOffset); bs.push(0, 0, 6, 0); ascii(bs, 'Sheet1');
     rec(o, 0x0085, bs);
-    var sst = bytes(); u32(sst, codes.length); u32(sst, codes.length);
-    codes.forEach(function (c) { u16(sst, c.length); sst.push(0); ascii(sst, c); });
+    var sst = bytes(); u32(sst, texts.length); u32(sst, texts.length);
+    texts.forEach(function (c) {
+      u16(sst, c.length);
+      if (/^[\x00-\xff]*$/.test(c)) { sst.push(0); ascii(sst, c); }
+      else { sst.push(1); for (var i = 0; i < c.length; i++) u16(sst, c.charCodeAt(i)); }
+    });
     rec(o, 0x00FC, sst);
     rec(o, 0x000A, []);
     return o;
@@ -155,6 +174,33 @@ function makeXls(rows) {
   raw.split('&').forEach(function (kv) { var i = kv.indexOf('='); if (i > 0) parts[kv.slice(0, i)] = kv.slice(i + 1); });
   // 코드와 수량이 방문 기록에 오래 남지 않도록 주소에서 지웁니다.
   try { history.replaceState(null, '', location.pathname); } catch (e) {}
+  function download(name, data) {
+    var url = URL.createObjectURL(new Blob([data], { type: 'application/vnd.ms-excel' })), a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+  }
+  function showTable(heads, list) {
+    var t = document.createElement('table'), h = t.insertRow();
+    heads.forEach(function (x) { var th = document.createElement('th'); th.textContent = x; h.appendChild(th); });
+    list.forEach(function (r) { var tr = t.insertRow(); r.forEach(function (c) { tr.insertCell().textContent = typeof c === 'number' ? c.toLocaleString('ko-KR') : c; }); });
+    $('list').appendChild(t);
+  }
+  // 판매·재고 입력에 올릴 샘플 파일
+  if (parts.sample) {
+    var codes = parts.sample.split(',');
+    if (codes.length > 5 || !codes.every(function (c) { return /^[0-9A-Za-z-]{1,40}$/.test(c); })) { fail('주소가 잘못됐어요. 발주 페이지에서 다시 눌러 주세요.'); return; }
+    var ex = [[120, 40], [35, 12], [0, 5], [8, 0], [64, 30]];
+    var body = codes.map(function (c, i) { return [c, ex[i][0], ex[i][1]]; });
+    var heads = ['상품코드', '판매수량', '재고'], sample;
+    try { sample = makeGridXls([heads].concat(body), [{ width: 18, text: true }, { width: 11 }, { width: 11 }]); } catch (e) { fail('파일을 만들지 못했어요. 발주 페이지에서 다시 눌러 주세요.'); return; }
+    var saveSample = function () { download('다이노탱_판매재고_샘플.xls', sample); };
+    $('title').textContent = '샘플 파일을 받았어요';
+    $('msg').textContent = '내려받기 폴더의 파일을 열어 첫 줄 제목은 그대로 두고, 아래 줄에 상품코드, 판매수량, 재고를 입력해 저장해 주세요. 그 파일을 발주 페이지의 ‘판매·재고 입력’에 올리면 돼요. 들어 있는 숫자는 예시예요. 파일이 안 보이면 아래 버튼을 눌러 주세요.';
+    $('again').hidden = false; $('again').onclick = saveSample;
+    showTable(heads, body);
+    saveSample();
+    return;
+  }
   if (!parts.r) { $('title').textContent = '발주 파일 받기'; $('msg').textContent = '다이노탱 발주 페이지의 ‘엑셀 받기’ 버튼으로 열어 주세요.'; return; }
   var rows = [], bad = false, map = {};
   parts.r.split(',').forEach(function (p) {
@@ -168,19 +214,12 @@ function makeXls(rows) {
   var name = '다이노탱_발주' + (stamp ? '_' + stamp : '') + '.xls';
   var data;
   try { data = makeXls(rows); } catch (e) { fail('파일을 만들지 못했어요. 발주 페이지에서 다시 눌러 주세요.'); return; }
-  function save() {
-    var url = URL.createObjectURL(new Blob([data], { type: 'application/vnd.ms-excel' })), a = document.createElement('a');
-    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
-  }
+  function save() { download(name, data); }
   var total = rows.reduce(function (s, r) { return s + r.qty; }, 0);
   $('title').textContent = '파일을 받았어요';
   $('msg').textContent = rows.length + '품목 · ' + total.toLocaleString('ko-KR') + '개. 내려받기 폴더의 파일을 굿앰디 일괄등록에 올려 주세요. 파일이 안 보이면 아래 버튼을 눌러 주세요.';
   $('again').hidden = false; $('again').onclick = save;
-  var t = document.createElement('table'), h = t.insertRow();
-  ['상품코드', '수량'].forEach(function (x) { var th = document.createElement('th'); th.textContent = x; h.appendChild(th); });
-  rows.forEach(function (r) { var tr = t.insertRow(); tr.insertCell().textContent = r.code; tr.insertCell().textContent = r.qty.toLocaleString('ko-KR'); });
-  $('list').appendChild(t);
+  showTable(['상품코드', '수량'], rows.map(function (r) { return [r.code, r.qty]; }));
   save();
 })();
 </script>
