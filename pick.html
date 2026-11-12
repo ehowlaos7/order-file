@@ -73,20 +73,20 @@ function makeZip(files) {
     var X = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
     var M = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main', R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships', P = 'http://schemas.openxmlformats.org/package/2006/relationships';
     var XDR = 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing', A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
-    var L = 'ABCDEFG', out = [], pics = [], n = 1;
+    var L = 'ABCDEF', out = [], pics = [], n = 1;
     var str = function (c, s, v) { return '<c r="' + c + '" s="' + s + '" t="inlineStr"><is><t xml:space="preserve">' + e(v) + '</t></is></c>'; };
     var cell = function (c, s, v) { return v === '' || v == null ? '<c r="' + c + '" s="' + s + '"/>' : typeof v === 'number' ? '<c r="' + c + '" s="' + s + '"><v>' + v + '</v></c>' : str(c, s, v); };
-    out.push('<row r="1" ht="22" customHeight="1">' + ['번호', '사진', '품명', '상품코드', '수량', '확인', '비고'].map(function (h, j) { return str(L[j] + 1, 1, h); }).join('') + '</row>');
+    out.push('<row r="1" ht="22" customHeight="1">' + ['번호', '사진', '품명', '상품코드', '수량', '확인'].map(function (h, j) { return str(L[j] + 1, 1, h); }).join('') + '</row>');
     var has = rows.filter(function (x) { return x.photo; }), no = rows.filter(function (x) { return !x.photo; }), k = 0;
     var line = function (x) {
       n++; k++;
-      out.push('<row r="' + n + '" ht="' + (x.photo ? 75 : 20) + '" customHeight="1">' + cell('A' + n, 3, k) + cell('B' + n, 3, '') + cell('C' + n, 2, x.name) + str('D' + n, 4, x.code) + cell('E' + n, 5, x.qty) + str('F' + n, 3, '☐') + cell('G' + n, 2, x.note) + '</row>');
+      out.push('<row r="' + n + '" ht="' + (x.photo ? 75 : 20) + '" customHeight="1">' + cell('A' + n, 3, k) + cell('B' + n, 3, '') + cell('C' + n, 2, x.name) + str('D' + n, 4, x.code) + cell('E' + n, 5, x.qty) + str('F' + n, 3, '☐') + '</row>');
       if (x.photo) pics.push({ row: n - 1, data: x.photo });
     };
     has.forEach(line);
     if (no.length) {
       n += 2;
-      out.push('<row r="' + n + '" ht="22" customHeight="1">' + str('A' + n, 6, '사진 없는 제품 (' + no.length + '줄)') + 'BCDEFG'.split('').map(function (c) { return '<c r="' + c + n + '" s="7"/>'; }).join('') + '</row>');
+      out.push('<row r="' + n + '" ht="22" customHeight="1">' + str('A' + n, 6, '사진 없는 제품 (' + no.length + '줄)') + 'BCDEF'.split('').map(function (c) { return '<c r="' + c + n + '" s="7"/>'; }).join('') + '</row>');
       no.forEach(line);
     }
     var files = [], anchors = pics.map(function (p, i) {
@@ -95,8 +95,8 @@ function makeZip(files) {
         '<xdr:pic><xdr:nvPicPr><xdr:cNvPr id="' + (i + 2) + '" name="사진 ' + (i + 1) + '"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId' + (i + 1) + '"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>' +
         '<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="952500" cy="952500"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:twoCellAnchor>';
     });
-    var cols = [6, 12.5, 46, 17, 8, 7, 22].map(function (w, j) { return '<col min="' + (j + 1) + '" max="' + (j + 1) + '" width="' + w + '" customWidth="1"/>'; }).join('');
-    var sheet = X + '<worksheet xmlns="' + M + '" xmlns:r="' + R + '"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:G' + n + '"/>' +
+    var cols = [6, 12.5, 46, 17, 8, 7].map(function (w, j) { return '<col min="' + (j + 1) + '" max="' + (j + 1) + '" width="' + w + '" customWidth="1"/>'; }).join('');
+    var sheet = X + '<worksheet xmlns="' + M + '" xmlns:r="' + R + '"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:F' + n + '"/>' +
       '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="16.5"/><cols>' + cols + '</cols>' +
       '<sheetData>' + out.join('') + '</sheetData><pageMargins left="0.3" right="0.3" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="0"/>' + (pics.length ? '<drawing r:id="rId1"/>' : '') + '</worksheet>';
     var bd = '<border><left style="thin"><color rgb="FFBFBFBF"/></left><right style="thin"><color rgb="FFBFBFBF"/></right><top style="thin"><color rgb="FFBFBFBF"/></top><bottom style="thin"><color rgb="FFBFBFBF"/></bottom><diagonal/></border>';
