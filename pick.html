@@ -84,11 +84,7 @@ function makeZip(files) {
       if (x.photo) pics.push({ row: n - 1, data: x.photo });
     };
     has.forEach(line);
-    if (no.length) {
-      n += 2;
-      out.push('<row r="' + n + '" ht="22" customHeight="1">' + str('A' + n, 6, '사진 없는 제품 (' + no.length + '줄)') + 'BCDEF'.split('').map(function (c) { return '<c r="' + c + n + '" s="7"/>'; }).join('') + '</row>');
-      no.forEach(line);
-    }
+    no.forEach(line);
     var files = [], anchors = pics.map(function (p, i) {
       files.push({ name: 'xl/media/image' + (i + 1) + '.jpeg', data: p.data });
       return '<xdr:oneCellAnchor><xdr:from><xdr:col>1</xdr:col><xdr:colOff>57150</xdr:colOff><xdr:row>' + p.row + '</xdr:row><xdr:rowOff>38100</xdr:rowOff></xdr:from><xdr:ext cx="304800" cy="304800"/>' +
