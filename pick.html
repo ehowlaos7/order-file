@@ -67,38 +67,44 @@ function makeZip(files) {
       im.src = src;
     });
   }
-  function pkXlsx(rows) {
-    // rows: [{name, code, qty, note, photo(Uint8Array|null)}] 사진 있는 줄이 먼저, 그다음 사진 없는 줄
+  function pkXlsx(doc) {
+    // doc: {title, info, qtyLabel, sections:[{label, rows:[{name, code, qty, photo(Uint8Array|null)}]}]}
+    // 1줄 매장명(제목), 2줄 날짜·전표 정보, 3줄 칸 제목. 전표가 여럿이면 전표마다 구분 줄.
     var e = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
     var X = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
     var M = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main', R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships', P = 'http://schemas.openxmlformats.org/package/2006/relationships';
     var XDR = 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing', A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
-    var L = 'ABCDEF', out = [], pics = [], n = 1;
+    var L = 'ABCDEF', out = [], pics = [], merges = [], n = 0, k = 0;
     var str = function (c, s, v) { return '<c r="' + c + '" s="' + s + '" t="inlineStr"><is><t xml:space="preserve">' + e(v) + '</t></is></c>'; };
     var cell = function (c, s, v) { return v === '' || v == null ? '<c r="' + c + '" s="' + s + '"/>' : typeof v === 'number' ? '<c r="' + c + '" s="' + s + '"><v>' + v + '</v></c>' : str(c, s, v); };
-    out.push('<row r="1" ht="22" customHeight="1">' + ['번호', '사진', '품명', '상품코드', '수량', '확인'].map(function (h, j) { return str(L[j] + 1, 1, h); }).join('') + '</row>');
-    var has = rows.filter(function (x) { return x.photo; }), no = rows.filter(function (x) { return !x.photo; }), k = 0;
-    var line = function (x) {
-      n++; k++;
-      out.push('<row r="' + n + '" ht="' + (x.photo ? 30 : 20) + '" customHeight="1">' + cell('A' + n, 3, k) + cell('B' + n, 3, '') + cell('C' + n, 2, x.name) + str('D' + n, 4, x.code) + cell('E' + n, 5, x.qty) + str('F' + n, 3, '☐') + '</row>');
-      if (x.photo) pics.push({ row: n - 1, data: x.photo });
-    };
-    has.forEach(line);
-    no.forEach(line);
+    var wide = function (s, v, ht, fill) { n++; merges.push('A' + n + ':F' + n); out.push('<row r="' + n + '" ht="' + ht + '" customHeight="1">' + str('A' + n, s, v) + 'BCDEF'.split('').map(function (c) { return '<c r="' + c + n + '" s="' + fill + '"/>'; }).join('') + '</row>'); };
+    wide(8, doc.title || '수주 정리', 30, 0);
+    wide(9, doc.info || '', 20, 0);
+    n++; out.push('<row r="' + n + '" ht="22" customHeight="1">' + ['번호', '사진', '상품명', '상품코드', doc.qtyLabel || '수량', '확인'].map(function (h, j) { return str(L[j] + n, 1, h); }).join('') + '</row>');
+    var head = n;
+    doc.sections.forEach(function (sec) {
+      if (sec.label) wide(6, sec.label, 22, 7);
+      sec.rows.forEach(function (x) {
+        n++; k++;
+        out.push('<row r="' + n + '" ht="' + (x.photo ? 30 : 20) + '" customHeight="1">' + cell('A' + n, 3, k) + cell('B' + n, 3, '') + cell('C' + n, 2, x.name) + str('D' + n, 4, x.code) + cell('E' + n, 5, x.qty) + str('F' + n, 3, '☐') + '</row>');
+        if (x.photo) pics.push({ row: n - 1, data: x.photo });
+      });
+    });
     var files = [], anchors = pics.map(function (p, i) {
       files.push({ name: 'xl/media/image' + (i + 1) + '.jpeg', data: p.data });
       return '<xdr:oneCellAnchor><xdr:from><xdr:col>1</xdr:col><xdr:colOff>57150</xdr:colOff><xdr:row>' + p.row + '</xdr:row><xdr:rowOff>38100</xdr:rowOff></xdr:from><xdr:ext cx="304800" cy="304800"/>' +
         '<xdr:pic><xdr:nvPicPr><xdr:cNvPr id="' + (i + 2) + '" name="사진 ' + (i + 1) + '"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId' + (i + 1) + '"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>' +
         '<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="304800" cy="304800"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>';
     });
-    var cols = [6, 5.5, 46, 17, 8, 7].map(function (w, j) { return '<col min="' + (j + 1) + '" max="' + (j + 1) + '" width="' + w + '" customWidth="1"/>'; }).join('');
+    var cols = [6, 5.5, 46, 17, 9, 7].map(function (w, j) { return '<col min="' + (j + 1) + '" max="' + (j + 1) + '" width="' + w + '" customWidth="1"/>'; }).join('');
     var sheet = X + '<worksheet xmlns="' + M + '" xmlns:r="' + R + '"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:F' + n + '"/>' +
-      '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="16.5"/><cols>' + cols + '</cols>' +
-      '<sheetData>' + out.join('') + '</sheetData><pageMargins left="0.3" right="0.3" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="0"/>' + (pics.length ? '<drawing r:id="rId1"/>' : '') + '</worksheet>';
+      '<sheetViews><sheetView workbookViewId="0"><pane ySplit="' + head + '" topLeftCell="A' + (head + 1) + '" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="16.5"/><cols>' + cols + '</cols>' +
+      '<sheetData>' + out.join('') + '</sheetData><mergeCells count="' + merges.length + '">' + merges.map(function (m) { return '<mergeCell ref="' + m + '"/>'; }).join('') + '</mergeCells>' +
+      '<pageMargins left="0.3" right="0.3" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="0"/>' + (pics.length ? '<drawing r:id="rId1"/>' : '') + '</worksheet>';
     var bd = '<border><left style="thin"><color rgb="FFBFBFBF"/></left><right style="thin"><color rgb="FFBFBFBF"/></right><top style="thin"><color rgb="FFBFBFBF"/></top><bottom style="thin"><color rgb="FFBFBFBF"/></bottom><diagonal/></border>';
-    var styles = X + '<styleSheet xmlns="' + M + '"><fonts count="3"><font><sz val="11"/><name val="맑은 고딕"/><family val="3"/></font><font><b/><sz val="11"/><name val="맑은 고딕"/><family val="3"/></font><font><b/><sz val="13"/><name val="맑은 고딕"/><family val="3"/></font></fonts>' +
+    var styles = X + '<styleSheet xmlns="' + M + '"><fonts count="5"><font><sz val="11"/><name val="맑은 고딕"/><family val="3"/></font><font><b/><sz val="11"/><name val="맑은 고딕"/><family val="3"/></font><font><b/><sz val="13"/><name val="맑은 고딕"/><family val="3"/></font><font><b/><sz val="18"/><name val="맑은 고딕"/><family val="3"/></font><font><sz val="11"/><color rgb="FF555555"/><name val="맑은 고딕"/><family val="3"/></font></fonts>' +
       '<fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDDEBF7"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFCE4D6"/><bgColor indexed="64"/></patternFill></fill></fills>' +
-      '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>' + bd + '</borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="8">' +
+      '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>' + bd + '</borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="10">' +
       '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
       '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
       '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>' +
@@ -106,11 +112,13 @@ function makeZip(files) {
       '<xf numFmtId="49" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>' +
       '<xf numFmtId="0" fontId="2" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
       '<xf numFmtId="0" fontId="1" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center"/></xf>' +
-      '<xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+      '<xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/>' +
+      '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf>' +
+      '<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
     files.unshift(
       { name: '[Content_Types].xml', data: X + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' + (pics.length ? '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' : '') + '</Types>' },
       { name: '_rels/.rels', data: X + '<Relationships xmlns="' + P + '"><Relationship Id="rId1" Type="' + R + '/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
-      { name: 'xl/workbook.xml', data: X + '<workbook xmlns="' + M + '" xmlns:r="' + R + '"><sheets><sheet name="수주 정리" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm.Print_Titles" localSheetId="0">\'수주 정리\'!$1:$1</definedName></definedNames></workbook>' },
+      { name: 'xl/workbook.xml', data: X + '<workbook xmlns="' + M + '" xmlns:r="' + R + '"><sheets><sheet name="수주 정리" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm.Print_Titles" localSheetId="0">\'수주 정리\'!$' + head + ':$' + head + '</definedName></definedNames></workbook>' },
       { name: 'xl/_rels/workbook.xml.rels', data: X + '<Relationships xmlns="' + P + '"><Relationship Id="rId1" Type="' + R + '/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="' + R + '/styles" Target="styles.xml"/></Relationships>' },
       { name: 'xl/styles.xml', data: styles },
       { name: 'xl/worksheets/sheet1.xml', data: sheet }
@@ -132,15 +140,16 @@ function makeZip(files) {
   var read = k === 'z=' ? new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text() : Promise.resolve(new TextDecoder().decode(bin));
   var file = null, name = '';
   read.then(function (t) {
-    var d = JSON.parse(t), list = d.r.map(function (r) { return { name: r[0], code: r[1], qty: r[2], note: r[3], img: r[4] ? 'img/' + r[1] + '.jpg' : null }; });
-    return Promise.all(list.map(function (x) { return x.img ? pkPhoto(x.img) : Promise.resolve(null); })).then(function (ph) {
-      var rows = list.map(function (x, i) { return { name: x.name, code: x.code, qty: x.qty, note: x.note, photo: ph[i] }; });
-      var withPic = rows.filter(function (x) { return x.photo; }).concat(rows.filter(function (x) { return !x.photo; }));
-      var dt = new Date(), p2 = function (v) { return ('0' + v).slice(-2); };
-      name = '사진정리_' + String(d.f || '수주').replace(/[\\/:*?"<>|]/g, '_') + '_' + p2(dt.getMonth() + 1) + p2(dt.getDate()) + '_' + p2(dt.getHours()) + p2(dt.getMinutes()) + '.xlsx';
-      file = new Blob([pkXlsx(withPic)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      var n = rows.filter(function (x) { return x.photo; }).length;
-      $('msg').textContent = '사진 있음 ' + n + '줄, 사진 없음 ' + (rows.length - n) + '줄로 정리했어요. 파일 받기가 시작돼요. 안 받아지면 아래 버튼을 눌러 주세요.';
+    var d = JSON.parse(t), secs = d.g || [['', (d.r || []).map(function (r) { return [r[0], r[1], r[2], r[4]]; })]], all = [];
+    secs.forEach(function (s) { s[1].forEach(function (r) { all.push(r); }); });
+    return Promise.all(all.map(function (r) { return r[3] ? pkPhoto('img/' + r[1] + '.jpg') : Promise.resolve(null); })).then(function (ph) {
+      var i = 0, n = 0, doc = { title: d.t || '수주 정리', info: d.i || '', qtyLabel: d.q || '수량', sections: secs.map(function (s) {
+        return { label: s[0], rows: s[1].map(function (r) { var p = ph[i++]; if (p) n++; return { name: r[0], code: r[1], qty: r[2], photo: p }; }) };
+      }) };
+      name = String(d.f || '수주정리.xlsx').replace(/[\\/:*?"<>|]/g, '_');
+      file = new Blob([pkXlsx(doc)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      $('title').textContent = doc.title;
+      $('msg').textContent = all.length + '줄 (사진 ' + n + '장)을 정리했어요. 파일 받기가 시작돼요. 안 받아지면 아래 버튼을 눌러 주세요.';
       $('again').hidden = false; give();
     });
   }).catch(function () { fail('파일을 만들지 못했어요. 발주 페이지에서 다시 눌러 주세요.'); });
