@@ -69,24 +69,24 @@ function makeZip(files) {
   }
   function pkXlsx(doc) {
     // doc: {title, info, qtyLabel, sections:[{label, rows:[{name, code, qty, photo(Uint8Array|null)}]}]}
-    // 1줄 매장명(제목), 2줄 날짜·전표 정보, 3줄 칸 제목. 전표가 여럿이면 전표마다 구분 줄.
+    // 1줄 매장명(가운데 제목), 2줄 수주일자·전표번호, 3줄 칸 제목. 칸: 상품코드 | 사진 | 상품명 | 수량 | 확인
     var e = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
     var X = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
     var M = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main', R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships', P = 'http://schemas.openxmlformats.org/package/2006/relationships';
     var XDR = 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing', A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
-    var L = 'ABCDEF', out = [], pics = [], merges = [], n = 0, k = 0;
+    var L = 'ABCDE', out = [], pics = [], merges = [], n = 0, k = 0;
     var str = function (c, s, v) { return '<c r="' + c + '" s="' + s + '" t="inlineStr"><is><t xml:space="preserve">' + e(v) + '</t></is></c>'; };
     var cell = function (c, s, v) { return v === '' || v == null ? '<c r="' + c + '" s="' + s + '"/>' : typeof v === 'number' ? '<c r="' + c + '" s="' + s + '"><v>' + v + '</v></c>' : str(c, s, v); };
-    var wide = function (s, v, ht, fill) { n++; merges.push('A' + n + ':F' + n); out.push('<row r="' + n + '" ht="' + ht + '" customHeight="1">' + str('A' + n, s, v) + 'BCDEF'.split('').map(function (c) { return '<c r="' + c + n + '" s="' + fill + '"/>'; }).join('') + '</row>'); };
+    var wide = function (s, v, ht, fill) { n++; merges.push('A' + n + ':E' + n); out.push('<row r="' + n + '" ht="' + ht + '" customHeight="1">' + str('A' + n, s, v) + 'BCDE'.split('').map(function (c) { return '<c r="' + c + n + '" s="' + fill + '"/>'; }).join('') + '</row>'); };
     wide(8, doc.title || '수주 정리', 30, 0);
     wide(9, doc.info || '', 20, 0);
-    n++; out.push('<row r="' + n + '" ht="22" customHeight="1">' + ['번호', '사진', '상품명', '상품코드', doc.qtyLabel || '수량', '확인'].map(function (h, j) { return str(L[j] + n, 1, h); }).join('') + '</row>');
+    n++; out.push('<row r="' + n + '" ht="22" customHeight="1">' + ['상품코드', '사진', '상품명', doc.qtyLabel || '수량', '확인'].map(function (h, j) { return str(L[j] + n, 1, h); }).join('') + '</row>');
     var head = n;
     doc.sections.forEach(function (sec) {
       if (sec.label) wide(6, sec.label, 22, 7);
       sec.rows.forEach(function (x) {
         n++; k++;
-        out.push('<row r="' + n + '" ht="' + (x.photo ? 30 : 20) + '" customHeight="1">' + cell('A' + n, 3, k) + cell('B' + n, 3, '') + cell('C' + n, 2, x.name) + str('D' + n, 4, x.code) + cell('E' + n, 5, x.qty) + str('F' + n, 3, '☐') + '</row>');
+        out.push('<row r="' + n + '" ht="' + (x.photo ? 30 : 20) + '" customHeight="1">' + str('A' + n, 4, x.code) + cell('B' + n, 3, '') + cell('C' + n, 2, x.name) + cell('D' + n, 5, x.qty) + str('E' + n, 3, '☐') + '</row>');
         if (x.photo) pics.push({ row: n - 1, data: x.photo });
       });
     });
@@ -96,8 +96,8 @@ function makeZip(files) {
         '<xdr:pic><xdr:nvPicPr><xdr:cNvPr id="' + (i + 2) + '" name="사진 ' + (i + 1) + '"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId' + (i + 1) + '"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>' +
         '<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="304800" cy="304800"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>';
     });
-    var cols = [6, 5.5, 46, 17, 9, 7].map(function (w, j) { return '<col min="' + (j + 1) + '" max="' + (j + 1) + '" width="' + w + '" customWidth="1"/>'; }).join('');
-    var sheet = X + '<worksheet xmlns="' + M + '" xmlns:r="' + R + '"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:F' + n + '"/>' +
+    var cols = [17, 5.5, 46, 9, 7].map(function (w, j) { return '<col min="' + (j + 1) + '" max="' + (j + 1) + '" width="' + w + '" customWidth="1"/>'; }).join('');
+    var sheet = X + '<worksheet xmlns="' + M + '" xmlns:r="' + R + '"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:E' + n + '"/>' +
       '<sheetViews><sheetView workbookViewId="0"><pane ySplit="' + head + '" topLeftCell="A' + (head + 1) + '" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="16.5"/><cols>' + cols + '</cols>' +
       '<sheetData>' + out.join('') + '</sheetData><mergeCells count="' + merges.length + '">' + merges.map(function (m) { return '<mergeCell ref="' + m + '"/>'; }).join('') + '</mergeCells>' +
       '<pageMargins left="0.3" right="0.3" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="0"/>' + (pics.length ? '<drawing r:id="rId1"/>' : '') + '</worksheet>';
@@ -113,7 +113,7 @@ function makeZip(files) {
       '<xf numFmtId="0" fontId="2" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
       '<xf numFmtId="0" fontId="1" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center"/></xf>' +
       '<xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/>' +
-      '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf>' +
+      '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
       '<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
     files.unshift(
       { name: '[Content_Types].xml', data: X + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' + (pics.length ? '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' : '') + '</Types>' },
