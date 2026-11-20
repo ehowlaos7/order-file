@@ -82,7 +82,6 @@ function makeGridXls(grid, cols) {
   var d = bytes(); u32(d, 0); u32(d, grid.length); u16(d, 0); u16(d, nCols); u16(d, 0);
   rec(sheet, 0x0200, d);
   var w2 = bytes(); u16(w2, 0x06B6); u16(w2, 0); u16(w2, 0); u16(w2, 0x40); u16(w2, 0); u16(w2, 0); u16(w2, 0); u32(w2, 0);
-  rec(sheet, 0x023E, w2);
   var textNo = 0;
   grid.forEach(function (row, i) {
     row.forEach(function (c, j) {
@@ -97,6 +96,8 @@ function makeGridXls(grid, cols) {
       }
     });
   });
+  // 화면 설정(WINDOW2)은 칸 기록 뒤, 끝(EOF) 앞에 와야 굿앰디(Apache POI)가 읽어요
+  rec(sheet, 0x023E, w2);
   rec(sheet, 0x000A, []);
 
   // 통합 문서 (시트 시작 위치를 넣으려고 두 번 만듭니다)
