@@ -212,7 +212,9 @@ function makeGridXls(grid, cols) {
   });
   if (bad || !rows.length) { fail('주소가 잘못됐어요. 발주 페이지에서 다시 눌러 주세요.'); return; }
   var stamp = /^[0-9_]{1,20}$/.test(parts.f || '') ? parts.f : '';
-  var name = '다이노탱_발주' + (stamp ? '_' + stamp : '') + '.xls';
+  // 파일 이름: 20261120다이노탱수주.xls, 20261120와펜수주.xls (와펜 발주에서 열면 주소에 n=wappen이 있어요)
+  var now = new Date(), day = (/^\d{8}/.exec(stamp) || [])[0] || (now.getFullYear() + ('0' + (now.getMonth() + 1)).slice(-2) + ('0' + now.getDate()).slice(-2));
+  var name = day + (parts.n === 'wappen' ? '와펜수주' : '다이노탱수주') + '.xls';
   var data;
   try { data = makeXls(rows); } catch (e) { fail('파일을 만들지 못했어요. 발주 페이지에서 다시 눌러 주세요.'); return; }
   function save() { download(name, data); }
