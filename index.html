@@ -109,7 +109,7 @@ function makeGridXls(grid, cols) {
     for (var i = 0; i < 5; i++) rec(o, 0x0031, font());
     for (var s = 0; s < 15; s++) rec(o, 0x00E0, xf(0, 0, true));
     rec(o, 0x00E0, xf(0, 0, false));   // 15번: 기본 칸(수량)
-    rec(o, 0x00E0, xf(0, 49, false));  // 16번: 글자 칸(상품코드)
+    rec(o, 0x00E0, xf(0, 0, false));   // 16번: 상품코드 칸(서식은 '일반', 값은 앞자리 0이 지워지지 않게 글자로)
     rec(o, 0x0293, [0x00, 0x80, 0x00, 0xFF]);
     var bs = bytes(); u32(bs, sheetOffset); bs.push(0, 0, 6, 0); ascii(bs, 'Sheet1');
     rec(o, 0x0085, bs);
